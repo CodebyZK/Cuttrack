@@ -1,0 +1,19 @@
+# Python cache and bytecode
+__pycache__/
+*.py[cod]
+
+# Virtual environments
+.venv/
+venv/
+
+# Local app data
+cuttrack.db
+*.db-shm
+*.db-wal
+
+# Environment secrets
+.env
+.env.*
+
+# IDE
+.vscode/

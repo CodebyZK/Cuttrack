@@ -1,192 +1,307 @@
-// ── Date display ─────────────────────────────────────────────
-(function() {
-  const now = new Date();
-  const dateEl = document.getElementById('display-date');
-  const dayEl = document.getElementById('display-day');
-  if (dateEl) dateEl.textContent = now.toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' });
-  if (dayEl) dayEl.textContent = now.toLocaleDateString('en-CA', { weekday: 'long' });
-})();
+import os
+from datetime import datetime, timedelta
+from functools import wraps
 
-// ── Tabs ──────────────────────────────────────────────────────
-function switchTab(tab) {
-  ['food', 'workout', 'sleep', 'weight'].forEach(t => {
-    const el = document.getElementById('form-' + t);
-    if (el) el.style.display = t === tab ? 'grid' : 'none';
-  });
-  document.querySelectorAll('.tab').forEach((el, i) => {
-    el.classList.toggle('active', ['food', 'workout', 'sleep', 'weight'][i] === tab);
-  });
-}
+from flask import Flask, jsonify, redirect, render_template, request, session, url_for
+from werkzeug.security import check_password_hash, generate_password_hash
 
-// ── API helper ────────────────────────────────────────────────
-async function api(method, path, body) {
-  const res = await fetch(path, {
-    method,
-    headers: { 'Content-Type': 'application/json' },
-    body: body ? JSON.stringify(body) : undefined
-  });
-  return res.json();
-}
+from database import (
+    add_food,
+    add_sleep,
+    add_weight,
+    add_workout,
+    count_users,
+    create_user,
+    delete_food,
+    delete_sleep,
+    delete_weight,
+    delete_workout,
+    get_first_user,
+    get_food_today,
+    get_sleep_recent,
+    get_user_by_username,
+    get_watch_calories_today,
+    get_weight_history,
+    get_workout_today,
+    init_db,
+    upsert_watch_calories,
+)
 
-// ── Log food ──────────────────────────────────────────────────
-async function logFood() {
-  const name = document.getElementById('food-name').value.trim();
-  const cals = parseInt(document.getElementById('food-cals').value) || 0;
-  const prot = parseInt(document.getElementById('food-protein').value) || 0;
-  if (!name) return;
-  await api('POST', '/api/food', { name, calories: cals, protein: prot });
-  location.reload();
-}
+app = Flask(__name__)
+app.secret_key = os.environ.get("CUTTRACK_SECRET_KEY", "change-this-to-a-random-string-in-production")
+WATCH_TOKEN = os.environ.get("CUTTRACK_WATCH_TOKEN", "change-this-to-a-secret-watch-token")
 
-// ── Log workout ───────────────────────────────────────────────
-async function logWorkout() {
-  const exercise = document.getElementById('workout-ex').value;
-  const sets = parseInt(document.getElementById('workout-sets').value) || 0;
-  const reps = parseInt(document.getElementById('workout-reps').value) || 0;
-  await api('POST', '/api/workout', { exercise, sets, reps });
-  location.reload();
-}
+TARGET_CALORIES = 1400
+TARGET_PROTEIN = 140
+TARGET_SLEEP_MIN = 7
+TARGET_SLEEP_MAX = 9
+GOAL_WEIGHT = 145
+START_WEIGHT = 165
 
-// ── Log sleep ─────────────────────────────────────────────────
-async function logSleep() {
-  const bedtime = document.getElementById('sleep-bed').value;
-  const waketime = document.getElementById('sleep-wake').value;
-  if (!bedtime || !waketime) return;
-  await api('POST', '/api/sleep', { bedtime, waketime });
-  location.reload();
-}
 
-// ── Log weight ────────────────────────────────────────────────
-async function logWeight() {
-  const value = parseFloat(document.getElementById('weight-val').value);
-  if (!value) return;
-  await api('POST', '/api/weight', { value });
-  location.reload();
-}
+init_db()
 
-// ── Delete helpers ────────────────────────────────────────────
-async function deleteFood(id, btn) {
-  await api('DELETE', '/api/food/' + id);
-  btn.closest('tr').remove();
-}
 
-async function deleteWorkout(id, btn) {
-  await api('DELETE', '/api/workout/' + id);
-  btn.closest('tr').remove();
-}
+def json_error(message, status=400):
+    return jsonify({"ok": False, "error": message}), status
 
-async function deleteSleep(id, btn) {
-  await api('DELETE', '/api/sleep/' + id);
-  btn.closest('tr').remove();
-}
 
-// ── Weight chart ──────────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', function() {
-  const canvas = document.getElementById('weightChart');
-  if (!canvas) return;
-  const ctx = canvas.getContext('2d');
+def login_required(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        if "user_id" not in session:
+            return redirect(url_for("login"))
+        return func(*args, **kwargs)
 
-  if (!weightData || weightData.length === 0) {
-    ctx.fillStyle = getComputedStyle(document.documentElement)
-      .getPropertyValue('--muted').trim() || '#6b7570';
-    ctx.font = '14px DM Sans, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('Log your weight to see the trend', canvas.offsetWidth / 2, 100);
-    return;
-  }
+    return wrapper
 
-  const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
-  const labels = weightData.map(w => {
-    const d = new Date(w.date + 'T00:00:00');
-    return d.toLocaleDateString('en-CA', { month: 'short', day: 'numeric' });
-  });
-  const values = weightData.map(w => w.value);
-  const minVal = Math.max(130, Math.min(...values) - 3);
-  const maxVal = Math.max(...values) + 3;
 
-  new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels,
-      datasets: [
-        {
-          label: 'Weight',
-          data: values,
-          borderColor: isDark ? '#b8f566' : '#4a8f1f',
-          backgroundColor: isDark ? 'rgba(184,245,102,0.07)' : 'rgba(74,143,31,0.07)',
-          borderWidth: 2,
-          pointBackgroundColor: isDark ? '#b8f566' : '#4a8f1f',
-          pointRadius: 4,
-          pointHoverRadius: 6,
-          fill: true,
-          tension: 0.35
+def current_user_id():
+    return session.get("user_id")
+
+
+def parse_sleep_hours(bedtime, waketime):
+    bed_dt = datetime.strptime(bedtime, "%H:%M")
+    wake_dt = datetime.strptime(waketime, "%H:%M")
+    if wake_dt <= bed_dt:
+        wake_dt += timedelta(days=1)
+    return round((wake_dt - bed_dt).total_seconds() / 3600.0, 2)
+
+
+@app.route("/")
+def root():
+    if count_users() == 0:
+        return redirect(url_for("register"))
+    if "user_id" not in session:
+        return redirect(url_for("login"))
+    return redirect(url_for("index"))
+
+
+@app.route("/index")
+@login_required
+def index():
+    user_id = current_user_id()
+    food = get_food_today(user_id)
+    workout = get_workout_today(user_id)
+    sleep = get_sleep_recent(user_id, limit=7)
+    weight = get_weight_history(user_id, limit=30)
+    watch = get_watch_calories_today(user_id)
+
+    return render_template(
+        "index.html",
+        username=session.get("username", "user"),
+        food=food,
+        workout=workout,
+        sleep=sleep,
+        weight=weight,
+        watch=watch,
+        targets={
+            "calories": TARGET_CALORIES,
+            "protein": TARGET_PROTEIN,
+            "sleep_min": TARGET_SLEEP_MIN,
+            "sleep_max": TARGET_SLEEP_MAX,
+            "goal_weight": GOAL_WEIGHT,
+            "start_weight": START_WEIGHT,
         },
+    )
+
+
+@app.route("/register", methods=["GET", "POST"])
+def register():
+    if count_users() > 0:
+        return redirect(url_for("login"))
+
+    error = None
+    if request.method == "POST":
+        username = (request.form.get("username") or "").strip()
+        password = request.form.get("password") or ""
+
+        if not username or not password:
+            error = "Username and password are required."
+        else:
+            user_id = create_user(username, generate_password_hash(password))
+            session["user_id"] = user_id
+            session["username"] = username
+            return redirect(url_for("index"))
+
+    return render_template("register.html", error=error)
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if count_users() == 0:
+        return redirect(url_for("register"))
+
+    if "user_id" in session:
+        return redirect(url_for("index"))
+
+    error = None
+    if request.method == "POST":
+        username = (request.form.get("username") or "").strip()
+        password = request.form.get("password") or ""
+        user = get_user_by_username(username)
+
+        if not user or not check_password_hash(user["password_hash"], password):
+            error = "Invalid username or password."
+        else:
+            session["user_id"] = user["id"]
+            session["username"] = user["username"]
+            return redirect(url_for("index"))
+
+    return render_template("login.html", error=error)
+
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for("login"))
+
+
+@app.route("/api/food", methods=["POST"])
+@login_required
+def api_food_add():
+    data = request.get_json(silent=True) or {}
+    name = (data.get("name") or "").strip()
+    calories = int(data.get("calories") or 0)
+    protein = int(data.get("protein") or 0)
+
+    if not name:
+        return json_error("Food name is required.")
+
+    add_food(current_user_id(), datetime.now().strftime("%H:%M"), name, calories, protein)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/food/<int:food_id>", methods=["DELETE"])
+@login_required
+def api_food_delete(food_id):
+    delete_food(current_user_id(), food_id)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/workout", methods=["POST"])
+@login_required
+def api_workout_add():
+    data = request.get_json(silent=True) or {}
+    exercise = (data.get("exercise") or "").strip()
+    sets = int(data.get("sets") or 0)
+    reps = int(data.get("reps") or 0)
+
+    if not exercise:
+        return json_error("Exercise is required.")
+
+    add_workout(current_user_id(), datetime.now().strftime("%H:%M"), exercise, sets, reps)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/workout/<int:workout_id>", methods=["DELETE"])
+@login_required
+def api_workout_delete(workout_id):
+    delete_workout(current_user_id(), workout_id)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/sleep", methods=["POST"])
+@login_required
+def api_sleep_add():
+    data = request.get_json(silent=True) or {}
+    bedtime = data.get("bedtime") or ""
+    waketime = data.get("waketime") or ""
+
+    if not bedtime or not waketime:
+        return json_error("Both bedtime and waketime are required.")
+
+    try:
+        hours = parse_sleep_hours(bedtime, waketime)
+    except ValueError:
+        return json_error("Invalid time format.")
+
+    add_sleep(current_user_id(), bedtime, waketime, hours)
+    return jsonify({"ok": True, "hours": hours})
+
+
+@app.route("/api/sleep/<int:sleep_id>", methods=["DELETE"])
+@login_required
+def api_sleep_delete(sleep_id):
+    delete_sleep(current_user_id(), sleep_id)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/weight", methods=["POST"])
+@login_required
+def api_weight_add():
+    data = request.get_json(silent=True) or {}
+
+    try:
+        value = float(data.get("value"))
+    except (TypeError, ValueError):
+        return json_error("Weight must be a number.")
+
+    add_weight(current_user_id(), value)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/weight/<int:weight_id>", methods=["DELETE"])
+@login_required
+def api_weight_delete(weight_id):
+    delete_weight(current_user_id(), weight_id)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/watch/today", methods=["GET"])
+@login_required
+def api_watch_today():
+    watch = get_watch_calories_today(current_user_id())
+    if not watch:
+        return jsonify(
+            {
+                "ok": True,
+                "active_calories": 0,
+                "resting_calories": 0,
+                "synced_at": None,
+            }
+        )
+
+    return jsonify(
         {
-          label: 'Goal (145 lbs)',
-          data: Array(values.length).fill(145),
-          borderColor: isDark ? '#5ff0a0' : '#0f7a4e',
-          borderWidth: 1.5,
-          borderDash: [6, 4],
-          pointRadius: 0,
-          fill: false
+            "ok": True,
+            "active_calories": watch["active_calories"],
+            "resting_calories": watch["resting_calories"],
+            "synced_at": watch["synced_at"],
         }
-      ]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          backgroundColor: isDark ? '#1c1f1d' : '#ffffff',
-          borderColor: isDark ? '#2a2e2c' : '#d8dcd6',
-          borderWidth: 1,
-          titleColor: isDark ? '#6b7570' : '#6b7570',
-          bodyColor: isDark ? '#e8ede9' : '#1a1e1b',
-          callbacks: { label: c => c.parsed.y + ' lbs' }
-        }
-      },
-      scales: {
-        x: {
-          ticks: { color: '#6b7570', font: { family: 'DM Mono', size: 11 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 8 },
-          grid: { color: isDark ? '#1e2220' : '#eef0ec' }
-        },
-        y: {
-          ticks: { color: '#6b7570', font: { family: 'DM Mono', size: 11 }, callback: v => v + ' lbs' },
-          grid: { color: isDark ? '#1e2220' : '#eef0ec' },
-          min: minVal,
-          max: maxVal
-        }
-      }
-    }
-  });
-});
+    )
 
-// ── Auto-refresh Apple Watch data every 5 minutes ─────────────
-setInterval(async function() {
-  try {
-    const data = await api('GET', '/api/watch/today');
-    if (data && data.active_calories !== undefined) {
-      const activeEl = document.getElementById('watch-active');
-      const restingEl = document.getElementById('watch-resting');
-      const totalEl = document.getElementById('watch-total');
-      const statActive = document.getElementById('stat-active');
-      const statResting = document.getElementById('stat-resting');
-      if (activeEl) activeEl.textContent = data.active_calories;
-      if (restingEl) restingEl.textContent = data.resting_calories;
-      if (totalEl) totalEl.textContent = data.active_calories + data.resting_calories;
-      if (statActive) statActive.textContent = data.active_calories;
-      if (statResting) statResting.textContent = data.resting_calories;
-    }
-  } catch(e) {}
-}, 5 * 60 * 1000);
 
-// ── Enter key submits active form ─────────────────────────────
-document.addEventListener('keydown', function(e) {
-  if (e.key !== 'Enter') return;
-  const active = document.querySelector('.tab.active');
-  if (!active) return;
-  const tab = active.textContent.trim().toLowerCase();
-  const fns = { food: logFood, workout: logWorkout, sleep: logSleep, weight: logWeight };
-  if (fns[tab]) fns[tab]();
-});
+@app.route("/api/watch/sync", methods=["POST"])
+def api_watch_sync():
+    provided = request.headers.get("X-Watch-Token", "")
+    if not WATCH_TOKEN or provided != WATCH_TOKEN:
+        return json_error("Unauthorized watch sync token.", status=401)
+
+    user = get_first_user()
+    if not user:
+        return json_error("No registered user exists yet.", status=400)
+
+    data = request.get_json(silent=True) or {}
+
+    try:
+        active = int(data.get("active_calories") or 0)
+        resting = int(data.get("resting_calories") or 0)
+    except (TypeError, ValueError):
+        return json_error("Calorie fields must be integers.")
+
+    synced_at = datetime.now().strftime("%Y-%m-%d %H:%M")
+    upsert_watch_calories(user["id"], active, resting, synced_at)
+
+    return jsonify(
+        {
+            "ok": True,
+            "active_calories": active,
+            "resting_calories": resting,
+            "synced_at": synced_at,
+        }
+    )
+
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000, debug=False)

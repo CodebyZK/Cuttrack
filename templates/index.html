@@ -3,8 +3,6 @@
 {% block body %}
 
 <div class="app">
-
-  <!-- Header -->
   <header>
     <div>
       <div class="logo">CUT<span>TRACK</span></div>
@@ -16,96 +14,75 @@
         <span id="display-day"></span>
       </div>
       <div class="header-actions">
-        <button class="icon-btn" id="theme-toggle" title="Toggle theme" onclick="toggleTheme()">☀</button>
-        <a href="/logout" class="icon-btn" title="Sign out">⎋</a>
+        <button class="icon-btn" id="theme-toggle" title="Toggle theme" onclick="toggleTheme()">O</button>
+        <a href="/logout" class="icon-btn" title="Sign out">OUT</a>
         <span class="username-badge">{{ username }}</span>
       </div>
     </div>
   </header>
 
-  <!-- Stats row -->
   <div class="stats-grid">
     <div class="stat-card">
       <div class="stat-label">Calories eaten</div>
-      <div class="stat-value stat-green" id="stat-cals">
-        {{ food | sum(attribute='calories') }}
-      </div>
-      <div class="stat-unit">of 1,400 target</div>
+      <div class="stat-value stat-green" id="stat-cals">{{ food | sum(attribute='calories') }}</div>
+      <div class="stat-unit">of {{ targets.calories }} target</div>
     </div>
     <div class="stat-card">
       <div class="stat-label">Active burn</div>
-      <div class="stat-value stat-accent" id="stat-active">
-        {{ watch.active_calories if watch else '—' }}
-      </div>
-      <div class="stat-unit">cal · Apple Watch{% if watch %} · {{ watch.synced_at }}{% endif %}</div>
+      <div class="stat-value stat-accent" id="stat-active">{{ watch.active_calories if watch else 0 }}</div>
+      <div class="stat-unit">cal Apple Watch</div>
     </div>
     <div class="stat-card">
       <div class="stat-label">Resting burn</div>
-      <div class="stat-value stat-blue" id="stat-resting">
-        {{ watch.resting_calories if watch else '—' }}
-      </div>
-      <div class="stat-unit">cal · Apple Watch</div>
+      <div class="stat-value stat-blue" id="stat-resting">{{ watch.resting_calories if watch else 0 }}</div>
+      <div class="stat-unit">cal Apple Watch</div>
     </div>
     <div class="stat-card">
       <div class="stat-label">Protein today</div>
-      <div class="stat-value stat-blue" id="stat-protein">
-        {{ food | sum(attribute='protein') }}g
-      </div>
-      <div class="stat-unit">of 140g target</div>
+      <div class="stat-value stat-blue" id="stat-protein">{{ food | sum(attribute='protein') }}g</div>
+      <div class="stat-unit">of {{ targets.protein }}g target</div>
     </div>
     <div class="stat-card">
       <div class="stat-label">Last sleep</div>
-      <div class="stat-value stat-warn" id="stat-sleep">
-        {% if sleep %}{{ sleep[0].hours }}h{% else %}—{% endif %}
-      </div>
-      <div class="stat-unit">target: 7–9 hrs</div>
+      <div class="stat-value stat-warn" id="stat-sleep">{% if sleep %}{{ sleep[0].hours }}h{% else %}0h{% endif %}</div>
+      <div class="stat-unit">target {{ targets.sleep_min }}-{{ targets.sleep_max }} hrs</div>
     </div>
     <div class="stat-card">
       <div class="stat-label">Current weight</div>
-      <div class="stat-value" id="stat-weight">
-        {% if weight %}{{ weight[-1].value }}{% else %}—{% endif %}
-      </div>
-      <div class="stat-unit">lbs · goal: 145</div>
+      <div class="stat-value" id="stat-weight">{% if weight %}{{ weight[-1].value }}{% else %}0{% endif %}</div>
+      <div class="stat-unit">lbs goal {{ targets.goal_weight }}</div>
     </div>
   </div>
 
-  <!-- Progress bars -->
   <div class="section-title">TODAY</div>
   {% set total_cals = food | sum(attribute='calories') %}
   {% set total_prot = food | sum(attribute='protein') %}
-  {% set cal_pct = [((total_cals / 1400) * 100) | int, 100] | min %}
-  {% set prot_pct = [((total_prot / 140) * 100) | int, 100] | min %}
+  {% set cal_pct = [((total_cals / targets.calories) * 100) | int, 100] | min %}
+  {% set prot_pct = [((total_prot / targets.protein) * 100) | int, 100] | min %}
   <div class="progress-section">
     <div class="progress-item">
       <div class="progress-header">
         <span class="progress-name">Calories</span>
-        <span class="progress-vals">{{ total_cals }} / 1400 cal</span>
+        <span class="progress-vals">{{ total_cals }} / {{ targets.calories }} cal</span>
       </div>
-      <div class="progress-track">
-        <div class="progress-fill" style="width:{{ cal_pct }}%;background:var(--accent)"></div>
-      </div>
+      <div class="progress-track"><div class="progress-fill" style="width:{{ cal_pct }}%;background:var(--accent)"></div></div>
     </div>
     <div class="progress-item">
       <div class="progress-header">
         <span class="progress-name">Protein</span>
-        <span class="progress-vals">{{ total_prot }} / 140g</span>
+        <span class="progress-vals">{{ total_prot }} / {{ targets.protein }}g</span>
       </div>
-      <div class="progress-track">
-        <div class="progress-fill" style="width:{{ prot_pct }}%;background:var(--accent2)"></div>
-      </div>
+      <div class="progress-track"><div class="progress-fill" style="width:{{ prot_pct }}%;background:var(--accent2)"></div></div>
     </div>
     <div class="progress-item">
       <div class="progress-header">
         <span class="progress-name">Workout</span>
         <span class="progress-vals">{% if workout %}{{ workout | length }} exercise(s) logged{% else %}Not logged yet{% endif %}</span>
       </div>
-      <div class="progress-track">
-        <div class="progress-fill" style="width:{% if workout %}100{% else %}0{% endif %}%;background:var(--warn)"></div>
-      </div>
+      <div class="progress-track"><div class="progress-fill" style="width:{% if workout %}100{% else %}0{% endif %}%;background:var(--warn)"></div></div>
     </div>
   </div>
 
-  <!-- Log form tabs -->
   <div class="section-title">LOG ENTRY</div>
   <div class="tabs">
     <button class="tab active" onclick="switchTab('food')">Food</button>
@@ -125,8 +102,11 @@
     <div class="field">
       <label>Exercise</label>
       <select id="workout-ex">
-        <option>Pushups</option><option>Pullups</option><option>Dips</option>
-        <option>Bodyweight squats</option><option>Plank</option><option>Lunges</option><option>Other</option>
+        <option>Pushups</option>
+        <option>Pullups</option>
+        <option>Dips</option>
+        <option>Bodyweight squats</option>
+        <option>Plank</option>
       </select>
     </div>
     <div class="field"><label>Sets</label><input type="number" id="workout-sets" placeholder="3"></div>
@@ -145,64 +125,42 @@
     <button class="btn" onclick="logWeight()">LOG</button>
   </div>
 
-  <!-- Weight chart -->
   <div class="section-title">WEIGHT TREND</div>
-  <div class="chart-wrap">
-    <div class="chart-area"><canvas id="weightChart"></canvas></div>
-  </div>
+  <div class="chart-wrap"><div class="chart-area"><canvas id="weightChart"></canvas></div></div>
 
-  <!-- Two col panels -->
   <div class="two-col">
     <div class="panel">
       <div class="panel-title">Your targets</div>
-      <div class="info-row"><span class="info-key">Calorie target</span><span class="info-val">1,400 cal</span></div>
-      <div class="info-row"><span class="info-key">Protein target</span><span class="info-val">140g / day</span></div>
-      <div class="info-row"><span class="info-key">Sleep target</span><span class="info-val">7–9 hrs</span></div>
-      <div class="info-row"><span class="info-key">Goal weight</span><span class="info-val">145 lbs</span></div>
-      <div class="info-row"><span class="info-key">Start weight</span><span class="info-val">165 lbs</span></div>
-      <div class="info-row"><span class="info-key">Expected pace</span><span class="info-val">~1–1.5 lbs/wk</span></div>
+      <div class="info-row"><span class="info-key">Calorie target</span><span class="info-val">{{ targets.calories }} cal</span></div>
+      <div class="info-row"><span class="info-key">Protein target</span><span class="info-val">{{ targets.protein }}g / day</span></div>
+      <div class="info-row"><span class="info-key">Sleep target</span><span class="info-val">{{ targets.sleep_min }}-{{ targets.sleep_max }} hrs</span></div>
+      <div class="info-row"><span class="info-key">Goal weight</span><span class="info-val">{{ targets.goal_weight }} lbs</span></div>
+      <div class="info-row"><span class="info-key">Start weight</span><span class="info-val">{{ targets.start_weight }} lbs</span></div>
     </div>
     <div class="panel">
-      <div class="panel-title">Workout split (Mon/Wed/Fri)</div>
-      <div class="info-row"><span class="info-key">Pushups</span><span class="info-val">3 × failure</span></div>
-      <div class="info-row"><span class="info-key">Pullups</span><span class="info-val">3 × failure</span></div>
-      <div class="info-row"><span class="info-key">Dips</span><span class="info-val">3 × failure</span></div>
-      <div class="info-row"><span class="info-key">BW Squats</span><span class="info-val">3 × 15–20</span></div>
-      <div class="info-row"><span class="info-key">Plank</span><span class="info-val">3 × 30–45s</span></div>
-      <div class="info-row"><span class="info-key">Lunges</span><span class="info-val">3 × 12 each</span></div>
+      <div class="panel-title">Workout split</div>
+      <div class="info-row"><span class="info-key">Pushups</span><span class="info-val">3 x failure</span></div>
+      <div class="info-row"><span class="info-key">Pullups</span><span class="info-val">3 x failure</span></div>
+      <div class="info-row"><span class="info-key">Dips</span><span class="info-val">3 x failure</span></div>
+      <div class="info-row"><span class="info-key">Squats</span><span class="info-val">3 x 15-20</span></div>
+      <div class="info-row"><span class="info-key">Plank</span><span class="info-val">3 x 30-45s</span></div>
     </div>
   </div>
 
-  <!-- Apple Watch panel -->
   <div class="section-title">APPLE WATCH</div>
-  <div class="panel" style="margin-bottom:28px">
-    <div class="panel-title">Today's burn{% if watch %} · last sync {{ watch.synced_at }}{% endif %}</div>
+  <div class="panel" style="margin-bottom:24px">
+    <div class="panel-title">Today's burn{% if watch and watch.synced_at %} last sync {{ watch.synced_at }}{% endif %}</div>
     <div class="watch-row">
-      <div class="watch-stat">
-        <div class="watch-label">Active calories</div>
-        <div class="watch-val stat-accent" id="watch-active">{{ watch.active_calories if watch else '—' }}</div>
-      </div>
+      <div class="watch-stat"><div class="watch-label">Active calories</div><div class="watch-val stat-accent" id="watch-active">{{ watch.active_calories if watch else 0 }}</div></div>
       <div class="watch-divider"></div>
-      <div class="watch-stat">
-        <div class="watch-label">Resting calories</div>
-        <div class="watch-val stat-blue" id="watch-resting">{{ watch.resting_calories if watch else '—' }}</div>
-      </div>
+      <div class="watch-stat"><div class="watch-label">Resting calories</div><div class="watch-val stat-blue" id="watch-resting">{{ watch.resting_calories if watch else 0 }}</div></div>
       <div class="watch-divider"></div>
-      <div class="watch-stat">
-        <div class="watch-label">Total burn</div>
-        <div class="watch-val" id="watch-total">
-          {% if watch %}{{ watch.active_calories + watch.resting_calories }}{% else %}—{% endif %}
-        </div>
-      </div>
+      <div class="watch-stat"><div class="watch-label">Total burn</div><div class="watch-val" id="watch-total">{% if watch %}{{ watch.active_calories + watch.resting_calories }}{% else %}0{% endif %}</div></div>
     </div>
-    {% if not watch %}
-    <p class="watch-hint">Set up the iOS Shortcut on your iPhone to start syncing Apple Watch data. See README.md for instructions.</p>
-    {% endif %}
   </div>
 
-  <!-- Food log -->
   <div class="section-title">FOOD LOG</div>
-  <div class="table-wrap" id="food-table-wrap">
+  <div class="table-wrap">
     <table class="log-table">
       <thead><tr><th>Time</th><th>Food</th><th>Calories</th><th>Protein</th><th></th></tr></thead>
       <tbody id="food-log-body">
@@ -213,19 +171,18 @@
             <td>{{ f.name }}</td>
             <td><span class="badge badge-green">{{ f.calories }} cal</span></td>
             <td><span class="badge badge-blue">{{ f.protein }}g</span></td>
-            <td><button class="del-btn" onclick="deleteFood({{ f.id }}, this)">✕</button></td>
+            <td><button class="del-btn" onclick="deleteFood({{ f.id }}, this)">X</button></td>
           </tr>
           {% endfor %}
         {% else %}
-          <tr><td colspan="5"><div class="empty"><span>◎</span>No food logged today</div></td></tr>
+          <tr><td colspan="5"><div class="empty">No food logged today</div></td></tr>
         {% endif %}
       </tbody>
     </table>
   </div>
 
-  <!-- Workout log -->
   <div class="section-title">WORKOUT LOG</div>
-  <div class="table-wrap" id="workout-table-wrap">
+  <div class="table-wrap">
     <table class="log-table">
       <thead><tr><th>Time</th><th>Exercise</th><th>Sets</th><th>Reps</th><th></th></tr></thead>
       <tbody id="workout-log-body">
@@ -236,17 +193,16 @@
             <td>{{ w.exercise }}</td>
             <td>{{ w.sets }}</td>
             <td>{{ w.reps }}</td>
-            <td><button class="del-btn" onclick="deleteWorkout({{ w.id }}, this)">✕</button></td>
+            <td><button class="del-btn" onclick="deleteWorkout({{ w.id }}, this)">X</button></td>
           </tr>
           {% endfor %}
         {% else %}
-          <tr><td colspan="5"><div class="empty"><span>◎</span>No workouts logged today</div></td></tr>
+          <tr><td colspan="5"><div class="empty">No workouts logged today</div></td></tr>
         {% endif %}
       </tbody>
     </table>
   </div>
 
-  <!-- Sleep log -->
   <div class="section-title">SLEEP LOG</div>
   <div class="table-wrap">
     <table class="log-table">
@@ -262,19 +218,17 @@
             <td>{{ s.waketime }}</td>
             <td class="stat-blue">{{ s.hours }}h</td>
             <td><span class="badge {{ badge_class }}">{{ quality }}</span></td>
-            <td><button class="del-btn" onclick="deleteSleep({{ s.id }}, this)">✕</button></td>
+            <td><button class="del-btn" onclick="deleteSleep({{ s.id }}, this)">X</button></td>
           </tr>
           {% endfor %}
         {% else %}
-          <tr><td colspan="6"><div class="empty"><span>◎</span>No sleep logged</div></td></tr>
+          <tr><td colspan="6"><div class="empty">No sleep logged</div></td></tr>
         {% endif %}
       </tbody>
     </table>
   </div>
-
 </div>
 
-<!-- Hidden data for JS chart -->
 <script>
   const weightData = {{ weight | tojson }};
 </script>
