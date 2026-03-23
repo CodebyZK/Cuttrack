@@ -35,12 +35,10 @@
       </div>
     </div>
   </header>
-  <div class="app">
+  {% endif %}
+  <div class="{% if request.endpoint not in ['login', 'register'] %}app{% endif %}">
     {% block body %}{% endblock %}
   </div>
-  {% else %}
-  {% block body %}{% endblock %}
-  {% endif %}
   <script src="{{ url_for('static', filename='theme.js') }}"></script>
   <script>
     (function() {
