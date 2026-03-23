@@ -39,6 +39,10 @@
   <div class="import-msg" id="import-msg"></div>
 </div>
 
+<div class="section-title">CALORIE TREND — LAST 30 DAYS</div>
+<div class="chart-wrap"><div class="chart-area"><canvas id="calChart"></canvas></div></div>
+<div class="prediction-text" id="cal-prediction-text"></div>
+
 <div class="section-title">HISTORY — LAST 7 DAYS</div>
 {% if food %}
   {% for date_val, entries in food | groupby('date') %}
@@ -72,10 +76,84 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="{{ url_for('static', filename='app.js') }}"></script>
 <script>
+  const foodChartData = {{ food_chart | tojson }};
+  const calTarget = {{ targets.calories }};
+
   document.addEventListener("keydown", function(e) {
     if (e.key === "Enter" && document.activeElement.closest("#food-form")) logFood();
+  });
+
+  document.addEventListener("DOMContentLoaded", function() {
+    const canvas = document.getElementById("calChart");
+    if (!canvas) return;
+    const isDark = document.documentElement.getAttribute("data-theme") !== "light";
+
+    // Group by date and sum calories
+    const dailyMap = {};
+    for (const f of foodChartData) {
+      dailyMap[f.date] = (dailyMap[f.date] || 0) + f.calories;
+    }
+    const days = Object.keys(dailyMap).sort();
+    if (!days.length) return;
+    const cals = days.map(d => dailyMap[d]);
+
+    // Linear regression
+    function linReg(pts) {
+      const n = pts.length;
+      let sx=0,sy=0,sxy=0,sx2=0;
+      for (const [x,y] of pts) { sx+=x; sy+=y; sxy+=x*y; sx2+=x*x; }
+      const slope = (n*sxy - sx*sy) / (n*sx2 - sx*sx);
+      const intercept = (sy - slope*sx) / n;
+      return {slope, intercept};
+    }
+
+    const pts = cals.map((c, i) => [i, c]);
+    const labels = days.map(d => new Date(d+"T00:00:00").toLocaleDateString("en-CA",{month:"short",day:"numeric"}));
+
+    let predLabels = [], predValues = [], predText = "";
+    if (days.length >= 5) {
+      const {slope, intercept} = linReg(pts);
+      const lastX = pts.length - 1;
+      const forecastDays = 7;
+      predLabels = [];
+      predValues = Array(days.length).fill(null);
+      predValues[lastX] = cals[lastX];
+      for (let i = 1; i <= forecastDays; i++) {
+        const x = lastX + i;
+        const d = new Date(new Date(days[days.length-1]+"T00:00:00").getTime() + i * 86400000);
+        labels.push(d.toLocaleDateString("en-CA",{month:"short",day:"numeric"}));
+        predValues.push(Math.max(0, Math.round(slope * x + intercept)));
+      }
+      const avgCals = Math.round(cals.reduce((a,b)=>a+b,0) / cals.length);
+      const diff = avgCals - calTarget;
+      predText = `30-day avg: ${avgCals} cal/day — ${Math.abs(diff)} cal ${diff > 0 ? "over" : "under"} target.`;
+      document.getElementById("cal-prediction-text").textContent = predText;
+    }
+
+    const mainData = cals.concat(Array(labels.length - cals.length).fill(null));
+
+    new Chart(canvas.getContext("2d"), {
+      type: "line",
+      data: {
+        labels,
+        datasets: [
+          {label:"Calories", data:mainData, borderColor:isDark?"#7dff6b":"#4b8f23", backgroundColor:isDark?"rgba(125,255,107,0.08)":"rgba(75,143,35,0.08)", borderWidth:2, pointRadius:3, fill:true, tension:0.3},
+          {label:"Projection", data:predValues, borderColor:isDark?"rgba(125,255,107,0.35)":"rgba(75,143,35,0.35)", borderWidth:1.5, borderDash:[6,4], pointRadius:0, fill:false, tension:0.3},
+          {label:"Target", data:Array(labels.length).fill(calTarget), borderColor:isDark?"#61d8ff":"#1f79a3", borderWidth:1.5, borderDash:[4,4], pointRadius:0, fill:false}
+        ]
+      },
+      options: {
+        responsive:true, maintainAspectRatio:false,
+        plugins:{legend:{display:false}},
+        scales:{
+          x:{ticks:{color:"#6b7570",font:{family:"DM Mono",size:11},maxTicksLimit:10},grid:{color:isDark?"#1e2220":"#eef0ec"}},
+          y:{min:0,ticks:{color:"#6b7570",font:{family:"DM Mono",size:11},callback:v=>v+" cal"},grid:{color:isDark?"#1e2220":"#eef0ec"}}
+        }
+      }
+    });
   });
 
   async function importCronometer() {

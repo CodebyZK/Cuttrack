@@ -4,9 +4,12 @@
 })();
 
 function updateThemeBtn() {
-  const btn = document.getElementById("theme-toggle");
-  if (!btn) return;
-  btn.textContent = document.documentElement.getAttribute("data-theme") === "dark" ? "☀" : "☾";
+  const icon = document.getElementById("theme-icon");
+  const label = document.getElementById("theme-label");
+  if (!icon || !label) return;
+  const isDark = document.documentElement.getAttribute("data-theme") === "dark";
+  icon.textContent = isDark ? "☀" : "☾";
+  label.textContent = isDark ? "Light" : "Dark";
 }
 
 function toggleTheme() {

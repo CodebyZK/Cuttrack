@@ -133,6 +133,7 @@ def register():
             error = "Username and password are required."
         else:
             user_id = create_user(username, generate_password_hash(password))
+            session.permanent = True
             session["user_id"] = user_id
             session["username"] = username
             return redirect(url_for("index"))
@@ -157,6 +158,7 @@ def login():
         if not user or not check_password_hash(user["password_hash"], password):
             error = "Invalid username or password."
         else:
+            session.permanent = True
             session["user_id"] = user["id"]
             session["username"] = user["username"]
             return redirect(url_for("index"))
@@ -321,7 +323,8 @@ def api_watch_sync():
 def food_page():
     user_id = current_user_id()
     food = get_food_history(user_id, days=7)
-    return render_template("food.html", food=food, ollama_enabled=bool(OLLAMA_URL))
+    food_chart = get_food_history(user_id, days=30)
+    return render_template("food.html", food=food, food_chart=food_chart, ollama_enabled=bool(OLLAMA_URL), targets={"calories": TARGET_CALORIES, "protein": TARGET_PROTEIN})
 
 
 @app.route("/workout")
