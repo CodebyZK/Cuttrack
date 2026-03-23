@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}Sleep — CutTrack{% endblock %}
+{% block body %}
+
+<div class="section-title">LOG SLEEP</div>
+<div class="log-form grid-3" id="sleep-form">
+  <div class="field"><label>Bedtime</label><input type="time" id="sleep-bed" value="23:00"></div>
+  <div class="field"><label>Wake time</label><input type="time" id="sleep-wake" value="07:00"></div>
+  <button class="btn" onclick="logSleep()">LOG</button>
+</div>
+
+{% if sleep_chart %}
+<div class="section-title">LAST 14 NIGHTS</div>
+<div class="chart-wrap"><div class="chart-area"><canvas id="sleepChart"></canvas></div></div>
+{% endif %}
+
+<div class="section-title">HISTORY</div>
+{% if sleep %}
+<div class="table-wrap">
+  <table class="log-table">
+    <thead><tr><th>Date</th><th>Bed</th><th>Wake</th><th>Duration</th><th>Quality</th><th></th></tr></thead>
+    <tbody>
+      {% for s in sleep %}
+      {% set quality = 'Good' if s.hours >= 7 and s.hours <= 9 else ('Short' if s.hours < 7 else 'Long') %}
+      {% set badge_class = 'badge-green' if quality == 'Good' else ('badge-danger' if quality == 'Short' else 'badge-warn') %}
+      <tr>
+        <td class="muted">{{ s.date }}</td>
+        <td>{{ s.bedtime }}</td>
+        <td>{{ s.waketime }}</td>
+        <td class="stat-blue">{{ s.hours }}h</td>
+        <td><span class="badge {{ badge_class }}">{{ quality }}</span></td>
+        <td><button class="del-btn" onclick="deleteSleep({{ s.id }}, this)">✕</button></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+  <div class="empty" style="padding:20px 0">No sleep logged yet</div>
+{% endif %}
+
+<script>
+  const sleepChartData = {{ sleep_chart | tojson }};
+  const sleepTargetMin = {{ targets.sleep_min }};
+  const sleepTargetMax = {{ targets.sleep_max }};
+</script>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+<script>
+  document.addEventListener("keydown", function(e) {
+    if (e.key === "Enter" && document.activeElement.closest("#sleep-form")) logSleep();
+  });
+
+  document.addEventListener("DOMContentLoaded", function() {
+    const canvas = document.getElementById("sleepChart");
+    if (!canvas || !sleepChartData.length) return;
+    const isDark = document.documentElement.getAttribute("data-theme") !== "light";
+    const labels = sleepChartData.map(s => s.date.slice(5));
+    const values = sleepChartData.map(s => s.hours);
+    const colors = values.map(h =>
+      h >= sleepTargetMin && h <= sleepTargetMax
+        ? (isDark ? "rgba(125,255,107,0.7)" : "rgba(75,143,35,0.7)")
+        : h < sleepTargetMin
+          ? (isDark ? "rgba(255,107,107,0.7)" : "rgba(181,71,71,0.7)")
+          : (isDark ? "rgba(255,209,102,0.7)" : "rgba(191,138,47,0.7)")
+    );
+    new Chart(canvas.getContext("2d"), {
+      type: "bar",
+      data: {
+        labels,
+        datasets: [
+          {label:"Hours", data:values, backgroundColor:colors, borderRadius:4},
+          {label:"Min target", data:Array(values.length).fill(sleepTargetMin), type:"line", borderColor:isDark?"rgba(125,255,107,0.4)":"rgba(75,143,35,0.4)", borderWidth:1.5, borderDash:[4,4], pointRadius:0, fill:false},
+          {label:"Max target", data:Array(values.length).fill(sleepTargetMax), type:"line", borderColor:isDark?"rgba(255,209,102,0.4)":"rgba(191,138,47,0.4)", borderWidth:1.5, borderDash:[4,4], pointRadius:0, fill:false}
+        ]
+      },
+      options: {
+        responsive:true, maintainAspectRatio:false,
+        plugins:{legend:{display:false}},
+        scales:{
+          x:{ticks:{color:"#6b7570",font:{family:"DM Mono",size:11}},grid:{color:isDark?"#1e2220":"#eef0ec"}},
+          y:{min:0,max:Math.max(10,...values)+1,ticks:{color:"#6b7570",font:{family:"DM Mono",size:11},callback:v=>v+"h"},grid:{color:isDark?"#1e2220":"#eef0ec"}}
+        }
+      }
+    });
+  });
+</script>
+{% endblock %}

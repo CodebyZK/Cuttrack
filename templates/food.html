@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block title %}Food — CutTrack{% endblock %}
+{% block body %}
+
+<div class="section-title">LOG FOOD</div>
+<div class="log-form" id="food-form">
+  <div class="food-lookup-row">
+    <div class="field" style="flex:2">
+      <label>Food / Meal</label>
+      <input type="text" id="food-name" placeholder="e.g. 2 scrambled eggs">
+    </div>
+    {% if ollama_enabled %}
+    <button class="lookup-btn" onclick="lookupFood()" id="lookup-btn">Estimate ✦</button>
+    {% endif %}
+  </div>
+  <div class="grid-3" style="display:grid;gap:10px">
+    <div class="field">
+      <label>Calories</label>
+      <input type="number" id="food-cals" placeholder="350">
+    </div>
+    <div class="field">
+      <label>Protein (g)</label>
+      <input type="number" id="food-protein" placeholder="40">
+    </div>
+    <button class="btn" onclick="logFood()">LOG</button>
+  </div>
+  {% if ollama_enabled %}
+  <div class="lookup-hint" id="lookup-hint"></div>
+  {% endif %}
+</div>
+
+<div class="import-section">
+  <div class="import-title">IMPORT FROM CRONOMETER</div>
+  <p class="import-note">Export your diary from <strong>cronometer.com</strong> → Account → Export Data → Servings CSV. Imports food name, calories, and protein for all dates.</p>
+  <div class="import-row">
+    <input type="file" id="import-file" accept=".csv" style="flex:1">
+    <button class="btn" onclick="importCronometer()">Import</button>
+  </div>
+  <div class="import-msg" id="import-msg"></div>
+</div>
+
+<div class="section-title">HISTORY — LAST 7 DAYS</div>
+{% if food %}
+  {% for date_val, entries in food | groupby('date') %}
+  {% set day_cals = entries | sum(attribute='calories') %}
+  {% set day_prot = entries | sum(attribute='protein') %}
+  <div class="history-day-header">
+    <span class="history-day-date">{{ date_val }}</span>
+    <span class="history-day-totals">{{ day_cals }} cal · {{ day_prot }}g protein</span>
+  </div>
+  <div class="table-wrap" style="margin-bottom:12px">
+    <table class="log-table">
+      <thead><tr><th>Time</th><th>Food</th><th>Calories</th><th>Protein</th><th></th></tr></thead>
+      <tbody>
+        {% for f in entries %}
+        <tr>
+          <td class="muted">{{ f.time }}</td>
+          <td>{{ f.name }}</td>
+          <td><span class="badge badge-green">{{ f.calories }} cal</span></td>
+          <td><span class="badge badge-blue">{{ f.protein }}g</span></td>
+          <td><button class="del-btn" onclick="deleteFood({{ f.id }}, this)">✕</button></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endfor %}
+{% else %}
+  <div class="empty" style="padding:20px 0">No food logged in the last 7 days</div>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+<script>
+  document.addEventListener("keydown", function(e) {
+    if (e.key === "Enter" && document.activeElement.closest("#food-form")) logFood();
+  });
+
+  async function importCronometer() {
+    const file = document.getElementById("import-file").files[0];
+    const msg = document.getElementById("import-msg");
+    if (!file) { msg.textContent = "Choose a CSV file first."; return; }
+    const form = new FormData();
+    form.append("file", file);
+    msg.textContent = "Importing…";
+    try {
+      const resp = await fetch("/api/import/cronometer", { method: "POST", body: form });
+      const data = await resp.json();
+      if (data.ok) {
+        msg.textContent = `Imported ${data.imported} entries.`;
+        setTimeout(() => location.reload(), 1200);
+      } else {
+        msg.textContent = data.error || "Import failed.";
+      }
+    } catch(_) { msg.textContent = "Import failed."; }
+  }
+</script>
+{% endblock %}

@@ -1,240 +1,129 @@
 {% extends "base.html" %}
-{% block title %}CutTrack{% endblock %}
+{% block title %}Home — CutTrack{% endblock %}
 {% block body %}
 
-<div class="app">
-  <header>
-    <div>
-      <div class="logo">CUT<span>TRACK</span></div>
-      <div class="tagline">Your cut. Your data. Your server.</div>
-    </div>
-    <div class="header-right">
-      <div class="date-display">
-        <strong id="display-date"></strong>
-        <span id="display-day"></span>
-      </div>
-      <div class="header-actions">
-        <button class="icon-btn" id="theme-toggle" title="Toggle theme" onclick="toggleTheme()">O</button>
-        <a href="/logout" class="icon-btn" title="Sign out">OUT</a>
-        <span class="username-badge">{{ username }}</span>
-      </div>
-    </div>
-  </header>
-
-  <div class="stats-grid">
-    <div class="stat-card">
-      <div class="stat-label">Calories eaten</div>
-      <div class="stat-value stat-green" id="stat-cals">{{ food | sum(attribute='calories') }}</div>
-      <div class="stat-unit">of {{ targets.calories }} target</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">Active burn</div>
-      <div class="stat-value stat-accent" id="stat-active">{{ watch.active_calories if watch else 0 }}</div>
-      <div class="stat-unit">cal Apple Watch</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">Resting burn</div>
-      <div class="stat-value stat-blue" id="stat-resting">{{ watch.resting_calories if watch else 0 }}</div>
-      <div class="stat-unit">cal Apple Watch</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">Protein today</div>
-      <div class="stat-value stat-blue" id="stat-protein">{{ food | sum(attribute='protein') }}g</div>
-      <div class="stat-unit">of {{ targets.protein }}g target</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">Last sleep</div>
-      <div class="stat-value stat-warn" id="stat-sleep">{% if sleep %}{{ sleep[0].hours }}h{% else %}0h{% endif %}</div>
-      <div class="stat-unit">target {{ targets.sleep_min }}-{{ targets.sleep_max }} hrs</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">Current weight</div>
-      <div class="stat-value" id="stat-weight">{% if weight %}{{ weight[-1].value }}{% else %}0{% endif %}</div>
-      <div class="stat-unit">lbs goal {{ targets.goal_weight }}</div>
-    </div>
+<div class="stats-grid">
+  <div class="stat-card">
+    <div class="stat-label">Calories today</div>
+    <div class="stat-value stat-green">{{ food | sum(attribute='calories') }}</div>
+    <div class="stat-unit">of {{ targets.calories }} target</div>
   </div>
-
-  <div class="section-title">TODAY</div>
-  {% set total_cals = food | sum(attribute='calories') %}
-  {% set total_prot = food | sum(attribute='protein') %}
-  {% set cal_pct = [((total_cals / targets.calories) * 100) | int, 100] | min %}
-  {% set prot_pct = [((total_prot / targets.protein) * 100) | int, 100] | min %}
-  <div class="progress-section">
-    <div class="progress-item">
-      <div class="progress-header">
-        <span class="progress-name">Calories</span>
-        <span class="progress-vals">{{ total_cals }} / {{ targets.calories }} cal</span>
-      </div>
-      <div class="progress-track"><div class="progress-fill" style="width:{{ cal_pct }}%;background:var(--accent)"></div></div>
-    </div>
-    <div class="progress-item">
-      <div class="progress-header">
-        <span class="progress-name">Protein</span>
-        <span class="progress-vals">{{ total_prot }} / {{ targets.protein }}g</span>
-      </div>
-      <div class="progress-track"><div class="progress-fill" style="width:{{ prot_pct }}%;background:var(--accent2)"></div></div>
-    </div>
-    <div class="progress-item">
-      <div class="progress-header">
-        <span class="progress-name">Workout</span>
-        <span class="progress-vals">{% if workout %}{{ workout | length }} exercise(s) logged{% else %}Not logged yet{% endif %}</span>
-      </div>
-      <div class="progress-track"><div class="progress-fill" style="width:{% if workout %}100{% else %}0{% endif %}%;background:var(--warn)"></div></div>
-    </div>
+  <div class="stat-card">
+    <div class="stat-label">Active burn</div>
+    <div class="stat-value stat-accent" id="stat-active">{{ watch.active_calories if watch else 0 }}</div>
+    <div class="stat-unit">cal Apple Watch</div>
   </div>
-
-  <div class="section-title">LOG ENTRY</div>
-  <div class="tabs">
-    <button class="tab active" onclick="switchTab('food')">Food</button>
-    <button class="tab" onclick="switchTab('workout')">Workout</button>
-    <button class="tab" onclick="switchTab('sleep')">Sleep</button>
-    <button class="tab" onclick="switchTab('weight')">Weight</button>
+  <div class="stat-card">
+    <div class="stat-label">Resting burn</div>
+    <div class="stat-value stat-blue" id="stat-resting">{{ watch.resting_calories if watch else 0 }}</div>
+    <div class="stat-unit">cal Apple Watch</div>
   </div>
-
-  <div id="form-food" class="log-form grid-4">
-    <div class="field"><label>Food / Meal</label><input type="text" id="food-name" placeholder="e.g. Chicken breast"></div>
-    <div class="field"><label>Calories</label><input type="number" id="food-cals" placeholder="350"></div>
-    <div class="field"><label>Protein (g)</label><input type="number" id="food-protein" placeholder="40"></div>
-    <button class="btn" onclick="logFood()">LOG</button>
+  <div class="stat-card">
+    <div class="stat-label">Protein today</div>
+    <div class="stat-value stat-blue">{{ food | sum(attribute='protein') }}g</div>
+    <div class="stat-unit">of {{ targets.protein }}g target</div>
   </div>
-
-  <div id="form-workout" class="log-form grid-4" style="display:none">
-    <div class="field">
-      <label>Exercise</label>
-      <select id="workout-ex">
-        <option>Pushups</option>
-        <option>Pullups</option>
-        <option>Dips</option>
-        <option>Bodyweight squats</option>
-        <option>Plank</option>
-      </select>
-    </div>
-    <div class="field"><label>Sets</label><input type="number" id="workout-sets" placeholder="3"></div>
-    <div class="field"><label>Reps / Seconds</label><input type="number" id="workout-reps" placeholder="15"></div>
-    <button class="btn" onclick="logWorkout()">LOG</button>
+  <div class="stat-card">
+    <div class="stat-label">Last sleep</div>
+    <div class="stat-value stat-warn">{% if sleep %}{{ sleep[0].hours }}h{% else %}—{% endif %}</div>
+    <div class="stat-unit">target {{ targets.sleep_min }}–{{ targets.sleep_max }} hrs</div>
   </div>
-
-  <div id="form-sleep" class="log-form grid-3" style="display:none">
-    <div class="field"><label>Bedtime</label><input type="time" id="sleep-bed" value="23:00"></div>
-    <div class="field"><label>Wake time</label><input type="time" id="sleep-wake" value="08:00"></div>
-    <button class="btn" onclick="logSleep()">LOG</button>
-  </div>
-
-  <div id="form-weight" class="log-form grid-2" style="display:none">
-    <div class="field"><label>Weight (lbs)</label><input type="number" id="weight-val" placeholder="165" step="0.1"></div>
-    <button class="btn" onclick="logWeight()">LOG</button>
-  </div>
-
-  <div class="section-title">WEIGHT TREND</div>
-  <div class="chart-wrap"><div class="chart-area"><canvas id="weightChart"></canvas></div></div>
-
-  <div class="two-col">
-    <div class="panel">
-      <div class="panel-title">Your targets</div>
-      <div class="info-row"><span class="info-key">Calorie target</span><span class="info-val">{{ targets.calories }} cal</span></div>
-      <div class="info-row"><span class="info-key">Protein target</span><span class="info-val">{{ targets.protein }}g / day</span></div>
-      <div class="info-row"><span class="info-key">Sleep target</span><span class="info-val">{{ targets.sleep_min }}-{{ targets.sleep_max }} hrs</span></div>
-      <div class="info-row"><span class="info-key">Goal weight</span><span class="info-val">{{ targets.goal_weight }} lbs</span></div>
-      <div class="info-row"><span class="info-key">Start weight</span><span class="info-val">{{ targets.start_weight }} lbs</span></div>
-    </div>
-    <div class="panel">
-      <div class="panel-title">Workout split</div>
-      <div class="info-row"><span class="info-key">Pushups</span><span class="info-val">3 x failure</span></div>
-      <div class="info-row"><span class="info-key">Pullups</span><span class="info-val">3 x failure</span></div>
-      <div class="info-row"><span class="info-key">Dips</span><span class="info-val">3 x failure</span></div>
-      <div class="info-row"><span class="info-key">Squats</span><span class="info-val">3 x 15-20</span></div>
-      <div class="info-row"><span class="info-key">Plank</span><span class="info-val">3 x 30-45s</span></div>
-    </div>
-  </div>
-
-  <div class="section-title">APPLE WATCH</div>
-  <div class="panel" style="margin-bottom:24px">
-    <div class="panel-title">Today's burn{% if watch and watch.synced_at %} last sync {{ watch.synced_at }}{% endif %}</div>
-    <div class="watch-row">
-      <div class="watch-stat"><div class="watch-label">Active calories</div><div class="watch-val stat-accent" id="watch-active">{{ watch.active_calories if watch else 0 }}</div></div>
-      <div class="watch-divider"></div>
-      <div class="watch-stat"><div class="watch-label">Resting calories</div><div class="watch-val stat-blue" id="watch-resting">{{ watch.resting_calories if watch else 0 }}</div></div>
-      <div class="watch-divider"></div>
-      <div class="watch-stat"><div class="watch-label">Total burn</div><div class="watch-val" id="watch-total">{% if watch %}{{ watch.active_calories + watch.resting_calories }}{% else %}0{% endif %}</div></div>
-    </div>
-  </div>
-
-  <div class="section-title">FOOD LOG</div>
-  <div class="table-wrap">
-    <table class="log-table">
-      <thead><tr><th>Time</th><th>Food</th><th>Calories</th><th>Protein</th><th></th></tr></thead>
-      <tbody id="food-log-body">
-        {% if food %}
-          {% for f in food %}
-          <tr>
-            <td class="muted">{{ f.time }}</td>
-            <td>{{ f.name }}</td>
-            <td><span class="badge badge-green">{{ f.calories }} cal</span></td>
-            <td><span class="badge badge-blue">{{ f.protein }}g</span></td>
-            <td><button class="del-btn" onclick="deleteFood({{ f.id }}, this)">X</button></td>
-          </tr>
-          {% endfor %}
-        {% else %}
-          <tr><td colspan="5"><div class="empty">No food logged today</div></td></tr>
-        {% endif %}
-      </tbody>
-    </table>
-  </div>
-
-  <div class="section-title">WORKOUT LOG</div>
-  <div class="table-wrap">
-    <table class="log-table">
-      <thead><tr><th>Time</th><th>Exercise</th><th>Sets</th><th>Reps</th><th></th></tr></thead>
-      <tbody id="workout-log-body">
-        {% if workout %}
-          {% for w in workout %}
-          <tr>
-            <td class="muted">{{ w.time }}</td>
-            <td>{{ w.exercise }}</td>
-            <td>{{ w.sets }}</td>
-            <td>{{ w.reps }}</td>
-            <td><button class="del-btn" onclick="deleteWorkout({{ w.id }}, this)">X</button></td>
-          </tr>
-          {% endfor %}
-        {% else %}
-          <tr><td colspan="5"><div class="empty">No workouts logged today</div></td></tr>
-        {% endif %}
-      </tbody>
-    </table>
-  </div>
-
-  <div class="section-title">SLEEP LOG</div>
-  <div class="table-wrap">
-    <table class="log-table">
-      <thead><tr><th>Date</th><th>Bed</th><th>Wake</th><th>Duration</th><th>Quality</th><th></th></tr></thead>
-      <tbody id="sleep-log-body">
-        {% if sleep %}
-          {% for s in sleep %}
-          {% set quality = 'Good' if s.hours >= 7 and s.hours <= 9 else ('Short' if s.hours < 7 else 'Long') %}
-          {% set badge_class = 'badge-green' if quality == 'Good' else ('badge-danger' if quality == 'Short' else 'badge-warn') %}
-          <tr>
-            <td class="muted">{{ s.date }}</td>
-            <td>{{ s.bedtime }}</td>
-            <td>{{ s.waketime }}</td>
-            <td class="stat-blue">{{ s.hours }}h</td>
-            <td><span class="badge {{ badge_class }}">{{ quality }}</span></td>
-            <td><button class="del-btn" onclick="deleteSleep({{ s.id }}, this)">X</button></td>
-          </tr>
-          {% endfor %}
-        {% else %}
-          <tr><td colspan="6"><div class="empty">No sleep logged</div></td></tr>
-        {% endif %}
-      </tbody>
-    </table>
+  <div class="stat-card">
+    <div class="stat-label">Current weight</div>
+    <div class="stat-value">{% if weight %}{{ weight[-1].value }}{% else %}—{% endif %}</div>
+    <div class="stat-unit">lbs · goal {{ targets.goal_weight }}</div>
   </div>
 </div>
 
-<script>
-  const weightData = {{ weight | tojson }};
-</script>
+{% set total_cals = food | sum(attribute='calories') %}
+{% set total_prot = food | sum(attribute='protein') %}
+{% set cal_pct = [((total_cals / targets.calories) * 100) | int, 100] | min %}
+{% set prot_pct = [((total_prot / targets.protein) * 100) | int, 100] | min %}
+
+<div class="section-title">TODAY</div>
+<div class="progress-section">
+  <div class="progress-item">
+    <div class="progress-header">
+      <span class="progress-name">Calories</span>
+      <span class="progress-vals">{{ total_cals }} / {{ targets.calories }} cal</span>
+    </div>
+    <div class="progress-track"><div class="progress-fill" style="width:{{ cal_pct }}%;background:var(--accent)"></div></div>
+  </div>
+  <div class="progress-item">
+    <div class="progress-header">
+      <span class="progress-name">Protein</span>
+      <span class="progress-vals">{{ total_prot }} / {{ targets.protein }}g</span>
+    </div>
+    <div class="progress-track"><div class="progress-fill" style="width:{{ prot_pct }}%;background:var(--accent2)"></div></div>
+  </div>
+  <div class="progress-item">
+    <div class="progress-header">
+      <span class="progress-name">Workout</span>
+      <span class="progress-vals">{% if workout %}{{ workout | length }} logged{% else %}None logged{% endif %}</span>
+    </div>
+    <div class="progress-track"><div class="progress-fill" style="width:{% if workout %}100{% else %}0{% endif %}%;background:var(--warn)"></div></div>
+  </div>
+</div>
+
+<div class="section-title">APPLE WATCH</div>
+<div class="panel" style="margin-bottom:16px">
+  <div class="panel-title">Today's burn{% if watch and watch.synced_at %} · last sync {{ watch.synced_at }}{% endif %}</div>
+  <div class="watch-row">
+    <div class="watch-stat"><div class="watch-label">Active</div><div class="watch-val stat-accent" id="watch-active">{{ watch.active_calories if watch else 0 }}</div></div>
+    <div class="watch-divider"></div>
+    <div class="watch-stat"><div class="watch-label">Resting</div><div class="watch-val stat-blue" id="watch-resting">{{ watch.resting_calories if watch else 0 }}</div></div>
+    <div class="watch-divider"></div>
+    <div class="watch-stat"><div class="watch-label">Total</div><div class="watch-val" id="watch-total">{% if watch %}{{ watch.active_calories + watch.resting_calories }}{% else %}0{% endif %}</div></div>
+  </div>
+</div>
+
+<div class="section-title">WEIGHT TREND</div>
+<div class="chart-wrap"><div class="chart-area"><canvas id="weightChart"></canvas></div></div>
+
+<div class="quick-links">
+  <a href="/food" class="quick-link">Food Log →</a>
+  <a href="/workout" class="quick-link">Workout Log →</a>
+  <a href="/sleep" class="quick-link">Sleep Log →</a>
+  <a href="/weight" class="quick-link">Weight Log →</a>
+</div>
+
+<script>const weightData = {{ weight | tojson }};</script>
 {% endblock %}
 
 {% block scripts %}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="{{ url_for('static', filename='app.js') }}"></script>
+<script>
+  setInterval(async function() {
+    try {
+      const data = await api("GET", "/api/watch/today");
+      const active = data.active_calories || 0;
+      const resting = data.resting_calories || 0;
+      const ids = {"watch-active": active, "watch-resting": resting, "watch-total": active + resting, "stat-active": active, "stat-resting": resting};
+      for (const [id, val] of Object.entries(ids)) {
+        const el = document.getElementById(id);
+        if (el) el.textContent = val;
+      }
+    } catch(_) {}
+  }, 5 * 60 * 1000);
+
+  document.addEventListener("DOMContentLoaded", function() {
+    const canvas = document.getElementById("weightChart");
+    if (!canvas || !weightData.length) return;
+    const isDark = document.documentElement.getAttribute("data-theme") !== "light";
+    const labels = weightData.map(d => new Date(d.date + "T00:00:00").toLocaleDateString("en-CA", {month:"short",day:"numeric"}));
+    const values = weightData.map(d => d.value);
+    new Chart(canvas.getContext("2d"), {
+      type: "line",
+      data: {
+        labels,
+        datasets: [
+          {label:"Weight", data:values, borderColor:isDark?"#b8f566":"#4a8f1f", backgroundColor:isDark?"rgba(184,245,102,0.08)":"rgba(74,143,31,0.08)", borderWidth:2, pointRadius:4, fill:true, tension:0.35},
+          {label:"Goal (145)", data:Array(values.length).fill(145), borderColor:isDark?"#5ff0a0":"#0f7a4e", borderWidth:1.5, borderDash:[6,4], pointRadius:0, fill:false}
+        ]
+      },
+      options: {responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{x:{ticks:{color:"#6b7570",font:{family:"DM Mono",size:11},maxTicksLimit:8},grid:{color:isDark?"#1e2220":"#eef0ec"}},y:{min:Math.max(130,Math.min(...values)-3),max:Math.max(...values)+3,ticks:{color:"#6b7570",font:{family:"DM Mono",size:11},callback:v=>v+" lbs"},grid:{color:isDark?"#1e2220":"#eef0ec"}}}}
+    });
+  });
+</script>
 {% endblock %}

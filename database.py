@@ -1,5 +1,5 @@
 import sqlite3
-from datetime import date
+from datetime import date, timedelta
 
 DB = "cuttrack.db"
 
@@ -290,3 +290,45 @@ def get_watch_calories_today(user_id):
     ).fetchone()
     conn.close()
     return dict(row) if row else None
+
+
+def get_food_history(user_id, days=7):
+    conn = get_db()
+    since = (date.today() - timedelta(days=days - 1)).isoformat()
+    rows = conn.execute(
+        "SELECT * FROM food WHERE user_id=? AND date>=? ORDER BY date DESC, time ASC, id ASC",
+        (user_id, since),
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def get_workout_history(user_id, days=30):
+    conn = get_db()
+    since = (date.today() - timedelta(days=days - 1)).isoformat()
+    rows = conn.execute(
+        "SELECT * FROM workout WHERE user_id=? AND date>=? ORDER BY date DESC, time ASC, id ASC",
+        (user_id, since),
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def get_all_weight_history(user_id):
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT * FROM weight WHERE user_id=? ORDER BY date ASC, id ASC",
+        (user_id,),
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def add_food_on_date(user_id, date_str, time_str, name, calories, protein):
+    conn = get_db()
+    conn.execute(
+        "INSERT INTO food (user_id, date, time, name, calories, protein) VALUES (?,?,?,?,?,?)",
+        (user_id, date_str, time_str, name, calories, protein),
+    )
+    conn.commit()
+    conn.close()

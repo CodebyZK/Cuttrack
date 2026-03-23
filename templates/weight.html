@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% block title %}Weight — CutTrack{% endblock %}
+{% block body %}
+
+<div class="section-title">LOG WEIGHT</div>
+<div class="log-form grid-2" id="weight-form">
+  <div class="field"><label>Weight (lbs)</label><input type="number" id="weight-val" placeholder="165" step="0.1"></div>
+  <button class="btn" onclick="logWeight()">LOG</button>
+</div>
+
+<div class="section-title">TREND & PREDICTION</div>
+<div class="chart-wrap"><div class="chart-area"><canvas id="weightChart"></canvas></div></div>
+<div class="prediction-text" id="prediction-text"></div>
+
+<div class="section-title">HISTORY</div>
+{% if weight %}
+<div class="table-wrap">
+  <table class="log-table">
+    <thead><tr><th>Date</th><th>Weight</th><th>Change</th><th></th></tr></thead>
+    <tbody>
+      {% set weight_desc = weight | sort(attribute='date', reverse=True) %}
+      {% for i in range(weight_desc | length) %}
+      {% set w = weight_desc[i] %}
+      {% set prev = weight_desc[i+1] if i+1 < weight_desc | length else None %}
+      <tr>
+        <td class="muted">{{ w.date }}</td>
+        <td><strong>{{ w.value }} lbs</strong></td>
+        <td>
+          {% if prev %}
+            {% set diff = (w.value - prev.value) | round(1) %}
+            {% if diff < 0 %}<span class="stat-green">{{ diff }}</span>
+            {% elif diff > 0 %}<span class="stat-warn">+{{ diff }}</span>
+            {% else %}<span class="muted">—</span>{% endif %}
+          {% else %}<span class="muted">—</span>{% endif %}
+        </td>
+        <td><button class="del-btn" onclick="deleteWeight({{ w.id }}, this)">✕</button></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+  <div class="empty" style="padding:20px 0">No weight logged yet</div>
+{% endif %}
+
+<script>
+  const weightData = {{ weight | tojson }};
+  const goalWeight = {{ targets.goal_weight }};
+</script>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+<script>
+  document.addEventListener("keydown", function(e) {
+    if (e.key === "Enter" && document.activeElement.closest("#weight-form")) logWeight();
+  });
+
+  document.addEventListener("DOMContentLoaded", function() {
+    const canvas = document.getElementById("weightChart");
+    if (!canvas || !weightData.length) return;
+    const isDark = document.documentElement.getAttribute("data-theme") !== "light";
+
+    function linReg(pts) {
+      const n = pts.length;
+      let sx=0,sy=0,sxy=0,sx2=0;
+      for (const [x,y] of pts) { sx+=x; sy+=y; sxy+=x*y; sx2+=x*x; }
+      const slope = (n*sxy - sx*sy) / (n*sx2 - sx*sx);
+      const intercept = (sy - slope*sx) / n;
+      return {slope, intercept};
+    }
+
+    const MS = 86400000;
+    const t0 = new Date(weightData[0].date + "T00:00:00").getTime();
+    const pts = weightData.map(d => [(new Date(d.date+"T00:00:00").getTime()-t0)/MS, d.value]);
+    const labels = weightData.map(d => new Date(d.date+"T00:00:00").toLocaleDateString("en-CA",{month:"short",day:"numeric"}));
+    const values = weightData.map(d => d.value);
+
+    let predLabels = [], predValues = [], predText = "";
+    if (weightData.length >= 5) {
+      const {slope, intercept} = linReg(pts);
+      if (slope < 0) {
+        const lastX = pts[pts.length-1][0];
+        const daysToGoal = Math.ceil((goalWeight - intercept) / slope) - lastX;
+        if (daysToGoal > 0 && daysToGoal <= 365) {
+          const steps = Math.min(daysToGoal, 60);
+          for (let i = 0; i <= steps; i++) {
+            const x = lastX + (daysToGoal * i / steps);
+            const d = new Date(t0 + x * MS);
+            predLabels.push(d.toLocaleDateString("en-CA",{month:"short",day:"numeric"}));
+            predValues.push(parseFloat((slope*x + intercept).toFixed(1)));
+          }
+          const goalDate = new Date(t0 + (lastX + daysToGoal) * MS);
+          const rate = (slope * 7).toFixed(1);
+          predText = `At current pace (${rate} lbs/week), goal of ${goalWeight} lbs reached around ${goalDate.toLocaleDateString("en-CA",{month:"long",day:"numeric",year:"numeric"})} — ${daysToGoal} days away.`;
+          document.getElementById("prediction-text").textContent = predText;
+        }
+      }
+    }
+
+    const allLabels = labels.concat(predLabels.slice(1));
+    const mainNulls = Array(labels.length).fill(null);
+    const predFull = mainNulls.concat(predValues.slice(1));
+    predFull[labels.length - 1] = values[values.length - 1];
+
+    new Chart(canvas.getContext("2d"), {
+      type: "line",
+      data: {
+        labels: allLabels,
+        datasets: [
+          {label:"Weight", data:values.concat(Array(predLabels.length-1).fill(null)), borderColor:isDark?"#b8f566":"#4a8f1f", backgroundColor:isDark?"rgba(184,245,102,0.08)":"rgba(74,143,31,0.08)", borderWidth:2, pointRadius:4, fill:true, tension:0.35},
+          {label:"Prediction", data:predFull, borderColor:isDark?"rgba(184,245,102,0.4)":"rgba(74,143,31,0.4)", borderWidth:1.5, borderDash:[6,4], pointRadius:0, fill:false, tension:0.2},
+          {label:"Goal", data:Array(allLabels.length).fill(goalWeight), borderColor:isDark?"#5ff0a0":"#0f7a4e", borderWidth:1.5, borderDash:[6,4], pointRadius:0, fill:false}
+        ]
+      },
+      options: {
+        responsive:true, maintainAspectRatio:false,
+        plugins:{legend:{display:false}},
+        scales:{
+          x:{ticks:{color:"#6b7570",font:{family:"DM Mono",size:11},maxTicksLimit:10},grid:{color:isDark?"#1e2220":"#eef0ec"}},
+          y:{min:Math.max(130,Math.min(...values)-3),max:Math.max(...values)+3,ticks:{color:"#6b7570",font:{family:"DM Mono",size:11},callback:v=>v+" lbs"},grid:{color:isDark?"#1e2220":"#eef0ec"}}
+        }
+      }
+    });
+  });
+</script>
+{% endblock %}

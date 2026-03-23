@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Workout — CutTrack{% endblock %}
+{% block body %}
+
+<div class="section-title">LOG WORKOUT</div>
+<div class="log-form grid-4" id="workout-form">
+  <div class="field">
+    <label>Exercise</label>
+    <select id="workout-ex">
+      <option>Pushups</option>
+      <option>Pullups</option>
+      <option>Dips</option>
+      <option>Bodyweight squats</option>
+      <option>Plank</option>
+    </select>
+  </div>
+  <div class="field"><label>Sets</label><input type="number" id="workout-sets" placeholder="3"></div>
+  <div class="field"><label>Reps / Seconds</label><input type="number" id="workout-reps" placeholder="15"></div>
+  <button class="btn" onclick="logWorkout()">LOG</button>
+</div>
+
+<div class="section-title">HISTORY — LAST 30 DAYS</div>
+{% if workout %}
+  {% for date_val, entries in workout | groupby('date') %}
+  <div class="history-day-header">
+    <span class="history-day-date">{{ date_val }}</span>
+    <span class="history-day-totals">{{ entries | list | length }} set{{ 's' if entries | list | length != 1 }}</span>
+  </div>
+  <div class="table-wrap" style="margin-bottom:12px">
+    <table class="log-table">
+      <thead><tr><th>Time</th><th>Exercise</th><th>Sets</th><th>Reps / Secs</th><th></th></tr></thead>
+      <tbody>
+        {% for w in entries %}
+        <tr>
+          <td class="muted">{{ w.time }}</td>
+          <td>{{ w.exercise }}</td>
+          <td>{{ w.sets }}</td>
+          <td>{{ w.reps }}</td>
+          <td><button class="del-btn" onclick="deleteWorkout({{ w.id }}, this)">✕</button></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endfor %}
+{% else %}
+  <div class="empty" style="padding:20px 0">No workouts logged in the last 30 days</div>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+<script>
+  document.addEventListener("keydown", function(e) {
+    if (e.key === "Enter" && document.activeElement.closest("#workout-form")) logWorkout();
+  });
+</script>
+{% endblock %}

@@ -1,4 +1,9 @@
+import csv
+import io
+import json
 import os
+import urllib.error
+import urllib.request
 from datetime import datetime, timedelta
 from functools import wraps
 
@@ -7,6 +12,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 from database import (
     add_food,
+    add_food_on_date,
     add_sleep,
     add_weight,
     add_workout,
@@ -16,12 +22,15 @@ from database import (
     delete_sleep,
     delete_weight,
     delete_workout,
+    get_all_weight_history,
     get_first_user,
+    get_food_history,
     get_food_today,
     get_sleep_recent,
     get_user_by_username,
     get_watch_calories_today,
     get_weight_history,
+    get_workout_history,
     get_workout_today,
     init_db,
     upsert_watch_calories,
@@ -29,7 +38,11 @@ from database import (
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("CUTTRACK_SECRET_KEY", "change-this-to-a-random-string-in-production")
+app.config["SESSION_PERMANENT"] = True
+app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=30)
 WATCH_TOKEN = os.environ.get("CUTTRACK_WATCH_TOKEN", "change-this-to-a-secret-watch-token")
+OLLAMA_URL = os.environ.get("CUTTRACK_OLLAMA_URL", "")
+OLLAMA_MODEL = os.environ.get("CUTTRACK_OLLAMA_MODEL", "llama3.2")
 
 TARGET_CALORIES = 1400
 TARGET_PROTEIN = 140
@@ -301,6 +314,128 @@ def api_watch_sync():
             "synced_at": synced_at,
         }
     )
+
+
+@app.route("/food")
+@login_required
+def food_page():
+    user_id = current_user_id()
+    food = get_food_history(user_id, days=7)
+    return render_template("food.html", food=food, ollama_enabled=bool(OLLAMA_URL))
+
+
+@app.route("/workout")
+@login_required
+def workout_page():
+    user_id = current_user_id()
+    workout = get_workout_history(user_id, days=30)
+    return render_template("workout.html", workout=workout)
+
+
+@app.route("/sleep")
+@login_required
+def sleep_page():
+    user_id = current_user_id()
+    sleep = get_sleep_recent(user_id, limit=30)
+    sleep_chart = list(reversed(sleep[:14]))
+    return render_template(
+        "sleep.html",
+        sleep=sleep,
+        sleep_chart=sleep_chart,
+        targets={"sleep_min": TARGET_SLEEP_MIN, "sleep_max": TARGET_SLEEP_MAX},
+    )
+
+
+@app.route("/weight")
+@login_required
+def weight_page():
+    user_id = current_user_id()
+    weight = get_all_weight_history(user_id)
+    return render_template(
+        "weight.html",
+        weight=weight,
+        targets={"goal_weight": GOAL_WEIGHT, "start_weight": START_WEIGHT},
+    )
+
+
+@app.route("/api/food/lookup", methods=["POST"])
+@login_required
+def api_food_lookup():
+    if not OLLAMA_URL:
+        return json_error("Ollama not configured. Set CUTTRACK_OLLAMA_URL.", status=503)
+
+    data = request.get_json(silent=True) or {}
+    name = (data.get("name") or "").strip()
+    if not name:
+        return json_error("Food name is required.")
+
+    prompt = (
+        f'Estimate calories and protein for: "{name}". '
+        'Output ONLY a JSON object: {"calories": 350, "protein": 30}. '
+        'Use integers. No other text.'
+    )
+    payload = json.dumps({"model": OLLAMA_MODEL, "prompt": prompt, "stream": False}).encode()
+
+    try:
+        req = urllib.request.Request(
+            f"{OLLAMA_URL.rstrip('/')}/api/generate",
+            data=payload,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            result = json.loads(resp.read())
+
+        text = result.get("response", "")
+        start = text.find("{")
+        end = text.rfind("}") + 1
+        if start == -1 or end == 0:
+            return json_error("Could not parse Ollama response.")
+
+        nutrition = json.loads(text[start:end])
+        return jsonify({
+            "ok": True,
+            "calories": int(nutrition.get("calories", 0)),
+            "protein": int(nutrition.get("protein", 0)),
+        })
+    except urllib.error.URLError as e:
+        return json_error(f"Could not reach Ollama: {e.reason}", status=503)
+    except (json.JSONDecodeError, KeyError, ValueError):
+        return json_error("Could not parse Ollama response.")
+
+
+@app.route("/api/import/cronometer", methods=["POST"])
+@login_required
+def api_import_cronometer():
+    if "file" not in request.files:
+        return json_error("No file provided.")
+
+    f = request.files["file"]
+    content = f.read().decode("utf-8", errors="replace")
+    reader = csv.DictReader(io.StringIO(content))
+
+    imported = 0
+    for i, row in enumerate(reader):
+        if i >= 2000:
+            break
+        try:
+            day = row.get("Day", "").strip()
+            name = row.get("Food Name", "").strip()
+            cal_str = (row.get("Energy (kcal)", "") or "0").strip()
+            prot_str = (row.get("Protein (g)", "") or "0").strip()
+
+            if not day or not name:
+                continue
+
+            datetime.strptime(day, "%Y-%m-%d")
+            calories = int(float(cal_str or 0))
+            protein = int(float(prot_str or 0))
+            add_food_on_date(current_user_id(), day, "00:00", name, calories, protein)
+            imported += 1
+        except (ValueError, KeyError):
+            continue
+
+    return jsonify({"ok": True, "imported": imported})
 
 
 if __name__ == "__main__":

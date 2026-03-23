@@ -16,8 +16,41 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
+  {% if request.endpoint not in ['login', 'register'] %}
+  <header class="site-header">
+    <div class="site-header-inner">
+      <a class="nav-logo" href="/">CUT<span>TRACK</span></a>
+      <nav class="nav-links">
+        <a href="/" class="nav-link{% if request.endpoint == 'index' %} active{% endif %}">Home</a>
+        <a href="/food" class="nav-link{% if request.endpoint == 'food_page' %} active{% endif %}">Food</a>
+        <a href="/workout" class="nav-link{% if request.endpoint == 'workout_page' %} active{% endif %}">Workout</a>
+        <a href="/sleep" class="nav-link{% if request.endpoint == 'sleep_page' %} active{% endif %}">Sleep</a>
+        <a href="/weight" class="nav-link{% if request.endpoint == 'weight_page' %} active{% endif %}">Weight</a>
+      </nav>
+      <div class="nav-actions">
+        <span class="nav-date" id="display-date"></span>
+        <button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()">☀</button>
+        <span class="username-badge">{{ session.username }}</span>
+        <a href="/logout" class="signout-btn">Sign Out</a>
+      </div>
+    </div>
+  </header>
+  <div class="app">
+    {% block body %}{% endblock %}
+  </div>
+  {% else %}
   {% block body %}{% endblock %}
+  {% endif %}
   <script src="{{ url_for('static', filename='theme.js') }}"></script>
+  <script>
+    (function() {
+      var el = document.getElementById('display-date');
+      if (el) {
+        var now = new Date();
+        el.textContent = now.toLocaleDateString('en-CA', { weekday: 'short', month: 'short', day: 'numeric' });
+      }
+    })();
+  </script>
   {% block scripts %}{% endblock %}
 </body>
 </html>
