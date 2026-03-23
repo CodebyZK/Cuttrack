@@ -1,0 +1,20 @@
+[Unit]
+Description=CutTrack fitness tracker
+After=network.target
+
+[Service]
+User=cuttrack
+Group=cuttrack
+WorkingDirectory=/opt/cuttrack
+Environment="CUTTRACK_SECRET_KEY=REPLACE_WITH_RANDOM_SECRET"
+Environment="CUTTRACK_WATCH_TOKEN=REPLACE_WITH_WATCH_TOKEN"
+ExecStart=/opt/cuttrack/.venv/bin/gunicorn \
+    --workers 2 \
+    --bind unix:/run/cuttrack/cuttrack.sock \
+    --umask 007 \
+    app:app
+RuntimeDirectory=cuttrack
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
